@@ -3,7 +3,7 @@
 #Disclaimer
 echo "Note that this will require sudo. If you are running this on an AWS EC2 instance, it should not ask for a password."
 
-sleep 5
+sleep 3
 
 #Dependancies
 sudo apt update
@@ -15,20 +15,26 @@ wget -P ~/ https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-
 tar xvf EasyRSA-unix-v3.0.6.tgz
 file=EasyRSA-v3.0.6
 
-cd $file
+cd $file || exit
+
+#Save hostname to fix sudo after script
+private_ip=$(hostname -I)
+sudo hostnamectl set-hostname "$private_ip"
 
 #CA handling
 echo "This will install the CA on the SAME machine. This is a big security risk, but if you are the single user on your VPN, it should be fine. If you do not want to install the CA here, you will have to do it manually."
-echo "Type \"yes\" to install the CA here."
+echo "Type \"no\" or \"n\" to install the CA elsewhere (WIP). Default is yes."
 read -r answer
-if [[ "$answer" == "yes" ]]
+if [[ "$answer" == "no" ]] || [[ "$answer" == "n" ]]
 then
+	true
+else
 	cp vars.example vars
 	./easyrsa init-pki
 	echo "You will need to confirm data about your CA. This is not necessarily relevant, enter whatever."
-	echo "It is recommanded to put a passphrase on your CA. Would you like one? You may have to type it several times during the script."
+	echo "It is recommanded to put a passphrase on your CA. Would you like one? You may have to type it several times during the script. (y/N)"
 	read -r answer
-	if [[ "$answer" == "yes" ]]
+	if [[ "$answer" == "yes" ]] || [[ "$answer" == "y" ]]
 	then
 		./easyrsa build-ca
 	else
@@ -102,7 +108,7 @@ then
 	sudo sed -i "s/port 1194/port $port/" /etc/openvpn/server.conf
 	sudo sed -i "s/proto udp/proto $proto/" /etc/openvpn/server.conf
 
-	if [[ "$proto" != "tcp" ]]
+	if [[ "$proto" == "tcp" ]]
 	then
 		sudo sed -i "s/explicit-exit-notify 1/explicit-exit-notify 0/" /etc/openvpn/server.conf
 	fi
@@ -145,16 +151,25 @@ EOF
 
 	sudo sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
 
-	sudo ufw allow $port/$proto
-	sudo ufw allow OpenSSH
+	#Enable openvpn service
+	sudo systemctl start openvpn@server
+	sudo systemctl enable openvpn@server
 
+	#Copy example client file
+	mkdir -p ~/client-configs/files
+	cp /usr/share/doc/openvpn/examples/sample-config-files/client.conf ~/client-configs/base.conf
+
+	#Prepare client file template
+	ip=$(curl --silent icanhazip.com)
+	sed -i "s/remote my-server-1 1194/remote $ip $port/" ~/client-configs/base.conf
+	sed -i "s/proto udp/proto $proto/" ~/client-configs/base.conf
 	sed -i "s/;user nobody/user nobody/" ~/client-configs/base.conf
 	sed -i "s/;group nogroup/group nogroup/" ~/client-configs/base.conf
 	sed -i "s/ca ca.crt/#ca ca.crt/" ~/client-configs/base.conf
 	sed -i "s/cert client.crt/#cert client.crt/" ~/client-configs/base.conf
 	sed -i "s/key client.key/#key client.key/" ~/client-configs/base.conf
 	sed -i "s/tls-auth ta.key 1/#tls-auth ta.key 1/" ~/client-configs/base.conf
-	sed -i "cipher AES-256-CBC/a auth SHA256" ~/client-configs/base.conf
+	sed -i "/cipher AES-256-CBC/ a auth SHA256" ~/client-configs/base.conf
 	
 	{
 
@@ -166,7 +181,9 @@ EOF
 		echo "# down /etc/openvpn/update-resolv-conf"
 	} >> ~/client-configs/base.conf
 
-	cat << 'EOF' > client-configs/make_config.sh
+	#Client file script
+	touch ~/client-configs/make_config.sh
+	cat << 'EOF' > ~/client-configs/make_config.sh
 #!/bin/bash
 
 # First argument: Client identifier
@@ -190,6 +207,22 @@ EOF
 
 	chmod u+x ~/client-configs/make_config.sh
 
-	echo "Setup completed. Run \"sudo ./make_config.sh [CLIENT_NAME]\" in directory \"client-configs\" to create a [CLIENT_NAME].ovpn file, and send it to the client."
-fi
+	echo "Setup completed. Now running \"sudo ./make_config.sh [CLIENT_NAME]\" in directory \"client-configs\" to create a [CLIENT_NAME].ovpn file. Send it to the client."
+	
+	cd ~/client-configs || exit
+	sudo ./make_config.sh $clientname
+
+	echo "Now enabling UFW. This may disrupt SSH sessions."
+
+	#Enable UFW. Done last as it may disrupt SSH...
+	sudo ufw allow from "$ip"
+	sudo ufw allow $port/$proto
+	sudo ufw allow ssh
+	sudo ufw allow OpenSSH
+	sudo ufw disable
+	sudo ufw enable
+
+	echo "Deployment complete. Send the .ovpn file to the client, uncomment some lines in case of a linux client, and off you go. To create a new client, you will need to first create a new certificate for it. As this is beyond the scope of this script (yet) it will not be addressed."
+
+	fi
 
