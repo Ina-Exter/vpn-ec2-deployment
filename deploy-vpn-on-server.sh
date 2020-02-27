@@ -160,7 +160,7 @@ EOF
 	cp /usr/share/doc/openvpn/examples/sample-config-files/client.conf ~/client-configs/base.conf
 
 	#Prepare client file template
-	ip=$(curl --silent icanhazip.com)
+	ip=$(curl --silent ifconfig.me)
 	sed -i "s/remote my-server-1 1194/remote $ip $port/" ~/client-configs/base.conf
 	sed -i "s/proto udp/proto $proto/" ~/client-configs/base.conf
 	sed -i "s/;user nobody/user nobody/" ~/client-configs/base.conf
