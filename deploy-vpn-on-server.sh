@@ -18,8 +18,15 @@ file=EasyRSA-v3.0.6
 cd $file || exit
 
 #Save hostname to fix sudo after script
-private_ip=$(hostname -I)
+private_ip_list=$(hostname -I)
+IFS=' '
+for x in $private_ip_list
+do
+	private_ip=$x
+	break
+done
 sudo hostnamectl set-hostname "$private_ip"
+unset IFS
 
 #CA handling
 echo "This will install the CA on the SAME machine. This is a big security risk, but if you are the single user on your VPN, it should be fine. If you do not want to install the CA here, you will have to do it manually."
