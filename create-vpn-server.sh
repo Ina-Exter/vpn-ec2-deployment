@@ -18,7 +18,7 @@ read -r region
 ip=$(curl --silent ifconfig.me)
 
 #Create key pair
-aws --profile "$profile" ec2 create-key-pair --region "$region" --key-name vpn-keypair > vpn-keypair.pem
+aws --profile "$profile" ec2 create-key-pair --region "$region" --key-name vpn-keypair --query 'KeyMaterial' --output text > vpn-keypair.pem
 chmod 400 vpn-keypair.pem
 
 #Create security group
