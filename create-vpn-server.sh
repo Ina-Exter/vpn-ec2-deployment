@@ -25,22 +25,22 @@ chmod 400 vpn-keypair.pem
 aws --profile "$profile" ec2 create-security-group --region "$region" --group-name vpn-sg --description "security group for openvpn instance" > /dev/null 2>&1
 
 #Request protocol
-echo "You will have to select a port and protocol for the VPN. Popular choices include port udp/1194 (but might require port-forwarding on your router) or tcp/443 (default value in this script). If you do not know what you are doing, go for tcp/443. Otherwise, you can select your own protocol with \"proto\"/\"port\" and the script will create a seucrity group rule with it."
+echo "You will have to select a port and protocol for the VPN. Popular choices include port udp/1194 (but might require port-forwarding on your router) or udp/443 (default value in this script). If you do not know what you are doing, go for udp/443. Otherwise, you can select your own protocol with \"proto\"/\"port\" and the script will create a seucrity group rule with it. Note that tcp is not advised (tcp meltdown)."
 echo "Note that you will be prompted again in the deploy script (WIP...?)"
 read -r protoport
 if [[ "${protoport:3:1}" != "/" ]]
 then
 	echo "Empty variable or bad structure, using default."
 	port="443"
-	proto="tcp"
+	proto="udp"
 else
 	proto=${protoport:0:3}
 	port=${protoport:4}
 fi
 if [[ "$proto" != "tcp" ]] && [[ "$proto" != "udp" ]]
 then
-	echo "Invalid protocol, using tcp"
-	proto="tcp"
+	echo "Invalid protocol, using udp"
+	proto="udp"
 fi
 if [[ "$port" -lt 1 ]] || [[ "$port" -gt 65535 ]]
 then

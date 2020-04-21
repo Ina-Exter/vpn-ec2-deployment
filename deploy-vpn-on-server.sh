@@ -89,7 +89,7 @@ else
 	sudo sed -i 's/;push "dhcp-option DNS 208.67.220.220"/push "dhcp-option DNS 208.67.220.220"/' /etc/openvpn/server.conf
 
 	#Port adjustment
-	echo "You will have to select a port and protocol for the VPN. Popular choices include port udp/1194 (but might require port-forwarding on your router) or tcp/443 (default value in this script). If you do not know what you are doing, go for tcp/443. Otherwise, you can select your own protocol with \"proto\"/\"port\" and the script will use this."
+	echo "You will have to select a port and protocol for the VPN. Popular choices include port udp/1194 (but might require port-forwarding on your router) or udp/443 (default value in this script). If you do not know what you are doing, go for udp/443. Otherwise, you can select your own protocol with \"proto\"/\"port\" and the script will use this. Note that tcp is not recommended (tcp meltdown)."
 	read -r protoport
 	if [[ "${protoport:3:1}" != "/" ]]
 	then
@@ -102,8 +102,8 @@ else
 	fi
 	if [[ "$proto" != "tcp" ]] && [[ "$proto" != "udp" ]]
 	then
-		echo "Invalid protocol, using tcp"
-		proto="tcp"
+		echo "Invalid protocol, using udp"
+		proto="udp"
 	fi
 	if [[ "$port" -lt 1 ]] || [[ "$port" -gt 65535 ]]
 	then
