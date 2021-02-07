@@ -73,6 +73,9 @@ done
 
 unset IFS
 
+#Squid proxy SG rule
+aws --profile "$profile" ec2 authorize-security-group-ingress --region "$region" --group-name vpn-sg --protocol tcp --port 3128 --cidr "$ip/32"
+
 
 #Create instance in default VPC
 
@@ -83,9 +86,10 @@ if [[ "$instanceid" != "null" ]]
 then
 	echo "Deployment of instance successful."
 	vpnserverip=$(aws --profile "$profile" ec2 describe-instances --region "$region" --filters "Name=instance-id,Values=$instanceid" --query Reservations[0].Instances[0].PublicIpAddress --output text)
-	echo "Send the \"deploy-vpn-on-server.sh\" script to the server using the following command:"
-	echo "scp -i vpn-keypair.pem deploy-vpn-on-server.sh ubuntu@$vpnserverip:/home/ubuntu"
-	echo "Then, connect using the following command and run \"deploy-vpn-on-server.sh\" on the server:"
+	echo "Sending the \"deploy-vpn-on-server.sh\" script to the server"
+	scp -i vpn-keypair.pem deploy-vpn-on-server.sh ubuntu@$vpnserverip:/home/ubuntu
+	echo "If this fails, use: scp -i vpn-keypair.pem deploy-vpn-on-server.sh ubuntu@$vpnserverip:/home/ubuntu"
+	echo "Connect using the following command and run \"deploy-vpn-on-server.sh\" on the server:"
 	echo "ssh -i vpn-keypair.pem ubuntu@$vpnserverip"
 else
 	echo "Error in instance deployment."

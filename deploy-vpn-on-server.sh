@@ -7,7 +7,7 @@ sleep 3
 
 #Dependancies
 sudo apt update
-sudo apt install openvpn openssl -y
+sudo apt install openvpn openssl squid -y
 
 #Install EasyRSA
 cd || exit
@@ -213,6 +213,11 @@ cat ${BASE_CONFIG} \
 EOF
 
 	chmod u+x ~/client-configs/make_config.sh
+
+	echo "Setting up Squid HTTP proxy (experimental) with Squid on port 3128"
+	#TODO HTTPS
+	sudo sed -i "s/http_access allow localnet/http_access allow source/" /etc/squid/squid.conf
+	sudo sed -i "/# should be allowed/ a acl source src $ip" /etc/squid/squid.conif
 
 	echo "Setup completed. Now running \"sudo ./make_config.sh [CLIENT_NAME]\" in directory \"client-configs\" to create a [CLIENT_NAME].ovpn file. Send it to the client."
 	
