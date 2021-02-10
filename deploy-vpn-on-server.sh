@@ -7,7 +7,7 @@ sleep 3
 
 #Dependancies
 sudo apt update
-sudo apt install openvpn openssl squid -y
+sudo apt install openvpn openssl -y
 
 #Install EasyRSA
 cd || exit
@@ -121,7 +121,8 @@ else
 	fi
 
 	#Server network configuration
-	sudo sed -i "s/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/" /etc/sysctl.conf
+	sudo sed -i "s/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/" /etc/sysctl.conf	
+	sudo sed -i "s/#net.ipv6.conf.all.forwarding = 1/net.ipv6.conf.all.forwarding = 1/" /etc/sysctl.conf
 	sudo sysctl -p
 
 	#Discover network interface
@@ -145,7 +146,8 @@ else
 	unset IFS
 
 	#Write ufw settings
-	sudo tee /etc/ufw/before.rules <<EOF >/dev/null
+	sudo tee -a /etc/ufw/before.rules <<EOF >/dev/null
+
 # START OPENVPN RULES
 # NAT table rules
 *nat
@@ -157,6 +159,40 @@ COMMIT
 EOF
 
 	sudo sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
+	
+	#IPV6 handling starts here
+	#Read subnet v6
+	ipv6dump=$(ip a show eth0 |grep "/64")
+	IFS=' ' read -ra array <<< "$ipv6dump"
+	ipv6=${array[1]}
+
+	#Write UFW rules: first remove commit, then add a heredoc
+	sudo tee -a /etc/ufw/before6.rules <<EOF >/dev/null
+
+# START OPENVPN RULES
+# NAT table rules
+*nat
+:POSTROUTING ACCEPT [0:0]
+# Allow traffic from OpenVPN client to $netinterface, ipv6
+-A POSTROUTING -s $ipv6 -o $netinterface -j MASQUERADE
+COMMIT
+# END OPENVPN RULES
+EOF
+
+	#Re-edit OpenVPN server.conf
+	sudo tee -a /etc/openvpn/server.conf <<EOF >/dev/null
+
+# ULA IPv6 network that will be used on the tunnel interfaces
+server-ipv6 $ipv6
+
+# push routing directives on the client side
+push "redirect-gateway ipv6 bypass-dhcp"
+
+# push IPv6 OpenDNS servers on the client side
+# it could be any public dns of your choice
+push "dhcp-option DNS6 2620:0:ccd::2"
+push "dhcp-option DNS6 2620:0:ccc::2"
+EOF
 
 	#Enable openvpn service
 	sudo systemctl start openvpn@server
@@ -177,7 +213,7 @@ EOF
 	sed -i "s/key client.key/#key client.key/" ~/client-configs/base.conf
 	sed -i "s/tls-auth ta.key 1/#tls-auth ta.key 1/" ~/client-configs/base.conf
 	sed -i "/cipher AES-256-CBC/ a auth SHA256" ~/client-configs/base.conf
-	
+	sed -i "/verb 3/ a # Force all traffic through vpn \nredirect-gateway def1" ~/client-configs/base.conf 	
 	{
 
 		echo "key-direction 1"
@@ -214,11 +250,6 @@ EOF
 
 	chmod u+x ~/client-configs/make_config.sh
 
-	echo "Setting up Squid HTTP proxy (experimental) with Squid on port 3128"
-	#TODO HTTPS
-	sudo sed -i "s/http_access allow localnet/http_access allow source/" /etc/squid/squid.conf
-	sudo sed -i "/# should be allowed/ a acl source src $ip" /etc/squid/squid.conif
-
 	echo "Setup completed. Now running \"sudo ./make_config.sh [CLIENT_NAME]\" in directory \"client-configs\" to create a [CLIENT_NAME].ovpn file. Send it to the client."
 	
 	cd ~/client-configs || exit
@@ -231,6 +262,8 @@ EOF
 	sudo ufw allow $port/$proto
 	sudo ufw allow ssh
 	sudo ufw allow OpenSSH
+	sudo ufw allow http
+	sudo ufw allow https
 	sudo ufw disable
 	sudo ufw enable
 
