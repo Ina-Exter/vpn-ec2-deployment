@@ -73,15 +73,11 @@ done
 
 unset IFS
 
-#Squid proxy SG rule
-aws --profile "$profile" ec2 authorize-security-group-ingress --region "$region" --group-name vpn-sg --protocol tcp --port 3128 --cidr "$ip/32"
-
-
 #Create instance in default VPC
 
-ami=$(aws --profile "$profile" ec2 describe-images --region "$region" --filters 'Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-20200112' 'Name=state,Values=available' --owners 099720109477 --query 'reverse(sort_by(Images, &CreationDate))[:1].ImageId' --output text)
+ami=$(aws --profile "$profile" ec2 describe-images --region "$region" --filters 'Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-20250821' 'Name=state,Values=available' --owners 099720109477 --query 'reverse(sort_by(Images, &CreationDate))[:1].ImageId' --output text)
 
-instanceid=$(aws --profile "$profile" ec2 run-instances --region "$region" --image-id "$ami" --instance-type t2.micro --security-groups vpn-sg --key-name vpn-keypair --query Instances[0].InstanceId)
+instanceid=$(aws --profile "$profile" ec2 run-instances --region "$region" --image-id "$ami" --instance-type t3.micro --security-groups vpn-sg --key-name vpn-keypair --query Instances[0].InstanceId)
 if [[ "$instanceid" != "null" ]]
 then
 	echo "Deployment of instance successful."

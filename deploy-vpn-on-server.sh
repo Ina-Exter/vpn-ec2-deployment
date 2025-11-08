@@ -7,13 +7,13 @@ sleep 3
 
 #Dependancies
 sudo apt update
-sudo apt install openvpn openssl squid -y
+sudo apt install openvpn openssl -y
 
 #Install EasyRSA
 cd || exit
-wget -P ~/ https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v3.0.6.tgz
-tar xvf EasyRSA-unix-v3.0.6.tgz
-file=EasyRSA-v3.0.6
+wget -P ~/ https://github.com/OpenVPN/easy-rsa/releases/download/v3.2.4/EasyRSA-3.2.4.tgz
+tar xvf EasyRSA-3.2.4.tgz
+file=EasyRSA-3.2.4
 
 cd $file || exit
 
@@ -57,7 +57,7 @@ else
 
 	#Diffie-Hellmann key
 	./easyrsa gen-dh
-	openvpn --genkey --secret ta.key
+	openvpn --genkey secret ta.key
 	sudo cp ~/$file/ta.key /etc/openvpn
 	sudo cp ~/$file/pki/dh.pem /etc/openvpn
 
@@ -74,16 +74,14 @@ else
 	sudo cp /etc/openvpn/ca.crt ~/client-configs/keys/
 
 	#OVPN service conf
-	sudo cp /usr/share/doc/openvpn/examples/sample-config-files/server.conf.gz /etc/openvpn/
-	sudo gzip -d /etc/openvpn/server.conf.gz
+	sudo cp /usr/share/doc/openvpn/examples/sample-config-files/server.conf /etc/openvpn/
 
 	#Edit /etc/openvpn/server.conf
 
 	sudo sed -i "s/;tls-auth ta.key 0/tls-auth ta.key 0/" /etc/openvpn/server.conf
-	sudo sed -i "/cipher AES-256-CBC/ a auth SHA256" /etc/openvpn/server.conf
 	sudo sed -i "s/dh dh2048.pem/dh dh.pem/" /etc/openvpn/server.conf
-	sudo sed -i "s/;user nobody/user nobody/" /etc/openvpn/server.conf
-	sudo sed -i "s/;group nogroup/group nogroup/" /etc/openvpn/server.conf
+	#sudo sed -i "s/;user nobody/user nobody/" /etc/openvpn/server.conf
+	#sudo sed -i "s/;group nogroup/group nogroup/" /etc/openvpn/server.conf
 	sudo sed -i 's/;push "redirect-gateway def1 bypass-dhcp"/push "redirect-gateway def1 bypass-dhcp"/' /etc/openvpn/server.conf
 	sudo sed -i 's/;push "dhcp-option DNS 208.67.222.222"/push "dhcp-option DNS 208.67.222.222"/' /etc/openvpn/server.conf
 	sudo sed -i 's/;push "dhcp-option DNS 208.67.220.220"/push "dhcp-option DNS 208.67.220.220"/' /etc/openvpn/server.conf
@@ -170,13 +168,8 @@ EOF
 	ip=$(curl --silent ifconfig.me)
 	sed -i "s/remote my-server-1 1194/remote $ip $port/" ~/client-configs/base.conf
 	sed -i "s/proto udp/proto $proto/" ~/client-configs/base.conf
-	sed -i "s/;user nobody/user nobody/" ~/client-configs/base.conf
-	sed -i "s/;group nogroup/group nogroup/" ~/client-configs/base.conf
-	sed -i "s/ca ca.crt/#ca ca.crt/" ~/client-configs/base.conf
-	sed -i "s/cert client.crt/#cert client.crt/" ~/client-configs/base.conf
-	sed -i "s/key client.key/#key client.key/" ~/client-configs/base.conf
-	sed -i "s/tls-auth ta.key 1/#tls-auth ta.key 1/" ~/client-configs/base.conf
-	sed -i "/cipher AES-256-CBC/ a auth SHA256" ~/client-configs/base.conf
+	#sed -i "s/;user nobody/user nobody/" ~/client-configs/base.conf
+	#sed -i "s/;group nogroup/group nogroup/" ~/client-configs/base.conf
 	
 	{
 
@@ -188,38 +181,9 @@ EOF
 		echo "# down /etc/openvpn/update-resolv-conf"
 	} >> ~/client-configs/base.conf
 
-	#Client file script
-	touch ~/client-configs/make_config.sh
-	cat << 'EOF' > ~/client-configs/make_config.sh
-#!/bin/bash
+    cp ~/client-configs/base.conf ~/client-configs/keys/client.ovpn
 
-# First argument: Client identifier
-
-KEY_DIR=~/client-configs/keys
-OUTPUT_DIR=~/client-configs/files
-BASE_CONFIG=~/client-configs/base.conf
-
-cat ${BASE_CONFIG} \
-    <(echo -e '<ca>') \
-    ${KEY_DIR}/ca.crt \
-    <(echo -e '</ca>\n<cert>') \
-    ${KEY_DIR}/${1}.crt \
-    <(echo -e '</cert>\n<key>') \
-    ${KEY_DIR}/${1}.key \
-    <(echo -e '</key>\n<tls-auth>') \
-    ${KEY_DIR}/ta.key \
-    <(echo -e '</tls-auth>') \
-    > ${OUTPUT_DIR}/${1}.ovpn
-EOF
-
-	chmod u+x ~/client-configs/make_config.sh
-
-	echo "Setting up Squid HTTP proxy (experimental) with Squid on port 3128"
-	#TODO HTTPS
-	sudo sed -i "s/http_access allow localnet/http_access allow source/" /etc/squid/squid.conf
-	sudo sed -i "/# should be allowed/ a acl source src $ip" /etc/squid/squid.conif
-
-	echo "Setup completed. Now running \"sudo ./make_config.sh [CLIENT_NAME]\" in directory \"client-configs\" to create a [CLIENT_NAME].ovpn file. Send it to the client."
+	echo "Setup completed."
 	
 	cd ~/client-configs || exit
 	sudo ./make_config.sh $clientname
@@ -234,7 +198,6 @@ EOF
 	sudo ufw disable
 	sudo ufw enable
 
-	echo "Deployment complete. Send the .ovpn file to the client, uncomment some lines in case of a linux client, and off you go. To create a new client, you will need to first create a new certificate for it. As this is beyond the scope of this script (yet) it will not be addressed."
+	echo "Deployment complete. Send the contents of the ~/client-configs/keys/ folder to the client, uncomment some lines in case of a linux client, and off you go. To create a new client, you will need to first create a new certificate for it. As this is beyond the scope of this script (yet) it will not be addressed."
 
 	fi
-
